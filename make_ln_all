@@ -1,0 +1,20 @@
+#! /bin/bash
+
+# $1 as the destination folder
+# output sampe
+# /home7/bitliu/workspace/github/bash_script/./build.sh /home7/bitliu//./build.sh
+
+if [ -z "$1" ]
+then
+echo $1 should not be none
+echo usage: make_ln_all [dest_folder]
+exit
+fi
+
+#fun='echo'
+fun='ln'
+
+base_path=`pwd`
+find . -maxdepth 1 -type f  -print0 | xargs -0 -n 1 -I [] ${fun} -s "${base_path}/[]" "$1/[]"
+#find . \( ! -name "*.mk" \) -a \( ! -name "*.h" \)
+
