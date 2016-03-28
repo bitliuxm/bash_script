@@ -1,0 +1,39 @@
+#! /bin/bash
+
+# change the branch for specified project in manifest/default.xml
+
+# $1 should be file path
+# $2 should be branch
+# $3-n should be project
+
+usage(){
+cat > /dev/fd/2 << EOF
+usage: manifest_changer [manifest_file_path] [branch] [project1] [project2] ...
+EOF
+}
+
+if [ $# -lt 3 ]
+then
+usage
+exit
+fi
+
+
+for project in "$@"
+do
+if [ ${project} = "$1" -o ${project} = "$2" ]
+then
+:
+else
+echo project=${project}
+path=`sed -n "\%name=\"${project}\"% s/^.*path=\"\([^\"]*\).*/\1/p" "$1" `
+groups=`sed -n "\%name=\"${project}\"% s/^.*groups=\"\([^\"]*\).*/\1/p" "$1" `
+echo path=${path}
+echo groups=${groups}
+sed -i "\%name=\"${project}\"% c\  <project path=\"${path}\" name=\"${project}\" groups=\"${groups}\" revision=\"$2\" />" "$1"
+fi
+done
+
+
+
+

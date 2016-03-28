@@ -1,0 +1,25 @@
+#! /bin/bash
+
+# will replace the ':' in grep -nr output to ' +', so the vim can open the file directly
+# $2 to specify the mode , default is vim
+
+if [ -z "$2" ]
+then
+bin='vim'
+elif [ "$2" = 'echo' ]
+then
+bin='echo'
+fi
+
+if [ -z $1 ]
+then
+${bin}
+else
+var="$1"
+var2=`echo ${var} | sed 's/:\([[:digit:]]\)/ +\1/g'`
+#${bin} ${var/:\([[:digit:]]\)/ +\1}
+${bin} ${var2}
+fi
+
+
+

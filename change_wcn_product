@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# will change boardconfig under device folder
+# change brcm to sprd, or toggle
+# pre-condition: sourced dir, the `gettop` can be used
+
+# TODO add croot
+
+#b1=sprdroid_own_copyright_marshmallow
+#b2=sprdroid6.0_trunk_bcm_dev
+
+if [ -n "$1" ]
+then
+echo "path $1"
+cd $1
+echo "cd to $1"
+else
+echo "exit"
+exit 1
+#echo "try to use current path"
+fi
+
+echo $2
+if [ -n "$2" ]  #non zero
+then
+if [ "$2" == "bcm" ]
+then
+# change to bcm
+sed -i 's/^\(BOARD_SPRD_WCNBT_MARLIN*\)/#\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+sed -i 's/^#\(BOARD_HAVE_FM_BCM*\)/\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+sed -i 's/^#\(BOARD_HAVE_BLUETOOTH_BCM*\)/\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+echo set to bcm
+exit
+fi
+
+if [ "$2" == "sprd" ]
+then
+# change to sprd
+sed -i 's/^\(BOARD_HAVE_FM_BCM*\)/#\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+sed -i 's/^\(BOARD_HAVE_BLUETOOTH_BCM*\)/#\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+sed -i 's/^#\(BOARD_SPRD_WCNBT_MARLIN*\)/\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+echo set to sprd
+exit
+fi
+echo "invalid param: $2"
+exit
+fi
+
+echo "no params specified"
+
+string1=`grep '#BOARD_HAVE_FM_BCM'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk `
+string2=`grep '#BOARD_HAVE_BLUETOOTH_BCM'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk `
+#| sed s/^\n//g
+#echo $string
+if [ -n "{$string}" ] && [ -n "${string2}" ]
+then
+echo toggle to bcm
+# change to bcm
+sed -i 's/^\(BOARD_SPRD_WCNBT_MARLIN*\)/#\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+sed -i 's/^#\(BOARD_HAVE_FM_BCM*\)/\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+sed -i 's/^#\(BOARD_HAVE_BLUETOOTH_BCM*\)/\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+else
+echo toggle to sprd
+# change to sprd
+sed -i 's/^\(BOARD_HAVE_FM_BCM*\)/#\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+sed -i 's/^\(BOARD_HAVE_BLUETOOTH_BCM*\)/#\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+sed -i 's/^#\(BOARD_SPRD_WCNBT_MARLIN*\)/\1/g'  device/sprd/scx35l/sp9830a_5h10/BoardConfig.mk
+fi
+
+

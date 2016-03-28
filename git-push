@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# pre-condition
-# working on your local branch, and tracking corresponding remote branch
-#
+# simple push the local commit in branch to a tracked remote branch
+# pre-condition: local branch should track a remote branch
 
 PS4="### "
 

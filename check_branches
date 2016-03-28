@@ -1,0 +1,194 @@
+#! /bin/bash
+
+# manifest_branch checker will output the git_branch of projects to stdout in the format as:
+# title: manifest_branch \t project1 ...
+# lines: branch \t branch ...
+
+usage(){
+cat > /dev/fd/2 << EOF 
+SYNOPSIS
+    check_branches -c [project_list_file] -p [manifest_branch_pattern] > output_file 
+    result will out put to stdout. using pipe to save as file.
+
+OPTIONS
+     -c project_list_file
+    project_list_file should be formated like below, using '#' to indicate ignore.
+  1 #vendor/sprd/modules/bt
+  2 #vendor/sprd/proprietories-source/connconfig
+  3 vendor/sprd/proprietories-source/bt
+  4 platform/system/bt
+  5 platform/external/bluetooth/bluedroid
+
+     -h print usage
+
+     -p manifest_branch_pattern
+    sample: "6.0"
+            "k318", etc
+    manifest_branch_pattern should be BRE
+EOF
+}
+
+debug_file=~/debug.txt
+#debug_file=/dev/null
+
+# output debug to errout
+debug(){
+b=`stat -c %Y ${debug_file}`
+a=`date +%s`
+if [ $[ $a - $b ] -gt 5 ]
+then
+echo -e $* > ${debug_file}
+else
+echo -e $* >> ${debug_file}
+fi
+}
+
+result_out()
+{
+echo -e $*
+}
+
+while getopts ":c:p:h" optname
+  do
+    case "$optname" in
+      "h")
+        debug "Option $optname has value $OPTARG"
+        #manifest_branch filter pattern as $2
+        usage
+        exit
+        ;;
+      "p")
+        debug "Option $optname has value $OPTARG"
+        #manifest_branch filter pattern as $2
+        manifest_branch_filter_pattern="$OPTARG"
+        ;;
+      "c")
+        debug "Option $optname has value $OPTARG"
+        if [ -e "$OPTARG" ]
+        then
+        git_projects=`cat "$OPTARG" | grep -e "^[^#]"`
+        else
+        echo file not found: "$OPTARG" > /dev/fd/2
+        fi
+        ;;
+      "?")
+        debug "Unknown option $OPTARG"
+        ;;
+      ":")
+        debug "No argument value for option $OPTARG"
+        ;;
+      *)
+      # Should not occur
+        debug "Unknown error while processing options"
+        ;;
+    esac
+    debug "OPTIND is now $OPTIND"
+  done
+
+
+if [ -z "${git_projects}" ]
+then
+#try to use the file under current folder with name "project_config.txt"
+default_project_config="project_config.txt"
+if [ -e "${default_project_config}" ]
+then
+echo git_projects not specified use ${default_project_config}> /dev/fd/2
+git_projects=`cat "${default_project_config}" | grep -e "^[^#]"`
+else
+echo git_projects not specified use default value> /dev/fd/2
+git_projects='
+vendor/sprd/modules/bt
+vendor/sprd/proprietories-source/connconfig
+vendor/sprd/proprietories-source/bt
+platform/system/bt
+platform/external/bluetooth/bluedroid
+'
+fi
+fi
+
+debug git_projects: ${git_projects}
+
+if [ -e ./.repo/manifests/default.xml ]
+then
+debug .repo exist
+cd .repo/manifests
+git stash > /dev/null
+git pull --all > /dev/null
+else
+debug .repo not exist
+#sadly in one situation the repo init is fail to download with the return code 0, so we can not depend on return code to check the result of repo init
+repo init -u gitadmin@gitsrv01.spreadtrum.com:android/platform/manifest
+#repo init -u gitadmin@gitsrv01.spreadtrum.com:android/platform/manifest ; echo $? > /dev/fd/2
+if [ -e ./.repo/manifests/default.xml ]
+then
+:
+else
+echo "repo init failed"  > /dev/fd/2
+exit 1
+fi
+cd .repo/manifests
+fi
+
+manifest_branches=`git branch -r | grep -e "sprdroid5\.1\|sprdroid6\.0" |  sed -n 's/^.*\/\(.*\)/\1/gp' | sort -u | grep "${manifest_branch_filter_pattern}"`
+
+debug ${manifest_branches}
+#output header
+title="branch"
+
+for git_project in ${git_projects}
+do
+# '#' check is performed when read file
+#if [[ "${git_project}" =~ ^#.* ]]
+#then
+#:
+#else
+debug ${git_project}
+title+="\t${git_project}"
+#fi
+done
+
+result_out ${title}
+
+for manifest_branch in ${manifest_branches}
+do
+debug ${manifest_branch}
+# checkout will automatically track the remote branch
+# use the /dev/null version if the switch notify is annoying for you
+# git checkout should not fail here, the repo is either stashed or inited
+git checkout ${manifest_branch}
+#git checkout ${manifest_branch} 2>&1 1> /dev/null
+if [ $? -ne 0 ]
+then
+debug "git checkout result is" $?
+fi
+default_branch=`grep "default revision" default.xml | sed -n 's/.*"\(.*\)"/\1/gp'`
+if [ -z ${default_branch} ]
+then
+debug default_branch: ${default_branch}
+default_branch=`grep "<default" default.xml | sed -n 's/^.*revision="\([^"]*\)".*/\1/gp'`
+debug default_branch2: ${default_branch}
+fi
+# at manifest folder now
+result_line=${manifest_branch}
+for git_project in ${git_projects}
+do
+debug ${git_project}
+#local_branch=`grep "${git_project}" default.xml | tee >> test.txt |  grep "revision" | tee >> test.txt | sed 's/^.*revision="\(.*\)"/\1/g' `
+local_branch_record=`grep "${git_project}" default.xml`
+if [ -z "${local_branch_record}" ]
+then
+debug local_branch_record is none
+local_branch="N/A"
+else
+local_branch=`grep "${git_project}" default.xml |  grep "revision" | sed -n 's_^.*revision="\([^"]*\)".*_\1_gp'`
+if [ -z ${local_branch} ]
+then
+local_branch=${default_branch}
+fi
+fi
+debug local_branch: ${local_branch}
+result_line+="\t${local_branch}"
+done
+result_out ${result_line}
+done
+
