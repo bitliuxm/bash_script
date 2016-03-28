@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# pre-condition
+# working on your local branch, and tracking corresponding remote branch
+#
+
+PS4="### "
+
+user=`git config user.name`
+if [ -z $user ]
+then
+  echo '!!! user is null !!!'
+  exit -1
+else
+  echo '###' user: $user '###'
+fi
+
+branch=`git branch | grep '^*' | sed 's/^*[ ]\{1,\}//'`
+if [ -z $branch ]
+then
+  echo '!!! branch is null !!!'
+  exit -1
+else
+  echo '###' branch: $branch '###'
+fi
+
+#remote=`git remote show`
+project=`git remote -v show | grep '(fetch)' | sed 's/^.*gitadmin@gitsrv01\.spreadtrum\.com:android\/\([^[:blank:]]*\)[[:blank:]]*.*$/\1/'`
+echo '###' project: $project '###'
+if [ -z $project ]
+then
+  echo '!!! project is null !!!'
+  exit -1
+else
+  echo '###' project: $project '###'
+fi
+
+remote_branch=`git config branch.$branch.merge | sed 's/refs\/heads\/\(.*\)/\1/'`
+if [ -z $remote_branch ]
+then
+  echo '!!! remote_branch is null !!!'
+  exit -1
+else
+  echo '###' remote_branch: $remote_branch '###'
+fi
+
+set -x
+git push ssh://$user@10.0.0.160:29418/$project HEAD:refs/for/$remote_branch
+
+
+
+#test='url = gitadmin@gitsrv01.spreadtrum.com:android/platform/hardware/libhardware'
+#test2=`echo $test | sed 's/^.*gitadmin@gitsrv01\.spreadtrum\.com:android\/\(.*$\)/\1/' `
+
+#git branch > branch
+
+
