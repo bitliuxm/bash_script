@@ -75,6 +75,7 @@ fi
 echo '###' branch selected: $branch '###'
 
 set -x
-# git clone gitadmin@gitsrv01.spreadtrum.com:android/platform/system/bt -b sprdroid6.0_ga1
-git clone gitadmin@gitsrv01.spreadtrum.com:android/$repository -b $branch
+# usage: git clone [options] [--] <repo> [<dir>]
+mkdir -p $repository
+git clone gitadmin@gitsrv01.spreadtrum.com:android/$repository -b "$branch"  "$repository"
 
