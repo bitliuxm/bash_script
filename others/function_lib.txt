@@ -1,0 +1,23 @@
+
+
+### 转换pac到product name
+```
+products=`cat test| awk '{print $4}' | sed 's/^\(.*\)-user\(debug\)\?.*/\1/g' | sed 's/^\(.*\)-native.*/\1/g' | sort -u` 
+echo ${products}
+for product in ${products}
+do
+find . -name "*${product}*.mk"
+done
+```
+
+### 移除包含BOM的
+
+```
+find . -type f -print0 | xargs -0 -n 1 file | grep "UTF-8 Unicode" >> 1.txt
+sed '/with BOM/ d' 1.txt > 2.txt  // 移除包含BOM的
+./md文档/add_utf8_bom.sh: UTF-8 Unicode text
+./md文档/changefilenames.sh: Bourne-Again shell script, UTF-8 Unicode text executable
+./md文档/makefile: HTML document, UTF-8 Unicode text, with very long lines
+```
+
+
