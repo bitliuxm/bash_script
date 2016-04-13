@@ -1,0 +1,52 @@
+#! /bin/bash
+
+# check the branch of a single repo
+# $1 as repo full path
+# $2 as manifest file
+
+# output the result to stdout
+
+# usage: check_branch device/sprd/scx35 ./manifest.xml 2>/dev/null
+# 2 to /dev/null
+
+device_project="$1"
+Manifest_filename="$2"
+# $3 means using the upstream
+# add this mode for ini commit, the IDH/manifest contains revision as commit hash. so we need to use the value of upstream instead
+Mode="$3"
+
+error_log(){
+echo -e $* > /dev/fd/2
+}
+
+if [ "${Mode}" = upstream ]
+then
+# using upstream as 1st option
+# \" should be used, sine the device/sprd/scx35l contain the full part of  device/sprd/scx35
+local_branch=`grep "${device_project}\"" ${Manifest_filename} |  grep "upstream" | sed -n 's_^.*upstream="\([^"]*\)".*_\1_gp'`
+error_log local_branch: ${local_branch}
+fi
+
+if [ -z "${local_branch}" ]
+then
+# using revision as 2nd option
+local_branch=`grep "${device_project}\"" ${Manifest_filename} |  grep "revision" | sed -n 's_^.*revision="\([^"]*\)".*_\1_gp'`
+error_log local_branch: ${local_branch}
+fi
+
+if [ -z "${local_branch}" ]
+then
+# using default branch as 3th option
+default_branch=`grep "default revision" ${Manifest_filename} | sed -n 's/.*"\(.*\)"/\1/gp'`
+error_log default_branch: ${default_branch}
+if [ -z ${default_branch} ]
+then
+default_branch=`grep "<default" ${Manifest_filename} | sed -n 's/^.*revision="\([^"]*\)".*/\1/gp'`
+error_log default_branch: ${default_branch}
+fi
+local_branch=${default_branch}
+error_log local_branch: ${local_branch}
+fi
+
+echo ${local_branch}
+

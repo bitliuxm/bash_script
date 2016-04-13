@@ -4,6 +4,8 @@
 # title: manifest_branch \t project1 ...
 # lines: branch \t branch ...
 
+# TODO: try to remove the .repo folder everytime the script is excute ?? 
+
 usage(){
 cat > /dev/fd/2 << EOF 
 SYNOPSIS
@@ -95,7 +97,7 @@ then
 echo git_projects not specified use ${default_project_config}> /dev/fd/2
 git_projects=`cat "${default_project_config}" | grep -e "^[^#]"`
 else
-echo git_projects not specified use default value> /dev/fd/2
+echo git_projects not specified use default value > /dev/fd/2
 git_projects='
 vendor/sprd/modules/bt
 vendor/sprd/proprietories-source/connconfig
@@ -117,7 +119,7 @@ git pull --all > /dev/null
 else
 debug .repo not exist
 #sadly in one situation the repo init is fail to download with the return code 0, so we can not depend on return code to check the result of repo init
-repo init -u gitadmin@gitsrv01.spreadtrum.com:android/platform/manifest
+repo init -u gitadmin@gitsrv01.spreadtrum.com:android/platform/manifest > /dev/null
 #repo init -u gitadmin@gitsrv01.spreadtrum.com:android/platform/manifest ; echo $? > /dev/fd/2
 if [ -e ./.repo/manifests/default.xml ]
 then
@@ -152,39 +154,46 @@ result_out ${title}
 for manifest_branch in ${manifest_branches}
 do
 debug ${manifest_branch}
+# stash first
+git stash > /dev/null
 # checkout will automatically track the remote branch
 # use the /dev/null version if the switch notify is annoying for you
 # git checkout should not fail here, the repo is either stashed or inited
-git checkout ${manifest_branch}
-#git checkout ${manifest_branch} 2>&1 1> /dev/null
+#git checkout ${manifest_branch}
+git checkout ${manifest_branch} 1>/dev/null 2>&1
+current_branch=`git branch | grep '^*' | sed 's/^*[ ]\{1,\}//'`
+if [ ${current_branch} != ${manifest_branch} ]
+then
+echo error_branch: current: ${current_branch} != ${manifest_branch} > /dev/fd/2
+fi
 if [ $? -ne 0 ]
 then
 debug "git checkout result is" $?
 fi
-default_branch=`grep "default revision" default.xml | sed -n 's/.*"\(.*\)"/\1/gp'`
-if [ -z ${default_branch} ]
-then
-debug default_branch: ${default_branch}
-default_branch=`grep "<default" default.xml | sed -n 's/^.*revision="\([^"]*\)".*/\1/gp'`
-debug default_branch2: ${default_branch}
-fi
-# at manifest folder now
+
+# now the default is no needed
+#default_branch=`grep "default revision" default.xml | sed -n 's/.*"\(.*\)"/\1/gp'`
+#if [ -z ${default_branch} ]
+#then
+#debug default_branch: ${default_branch}
+#default_branch=`grep "<default" default.xml | sed -n 's/^.*revision="\([^"]*\)".*/\1/gp'`
+#debug default_branch2: ${default_branch}
+#fi
+
+# result start with manifest_branch
 result_line=${manifest_branch}
+
 for git_project in ${git_projects}
 do
 debug ${git_project}
-#local_branch=`grep "${git_project}" default.xml | tee >> test.txt |  grep "revision" | tee >> test.txt | sed 's/^.*revision="\(.*\)"/\1/g' `
 local_branch_record=`grep "${git_project}" default.xml`
 if [ -z "${local_branch_record}" ]
 then
+# no such repo
 debug local_branch_record is none
 local_branch="N/A"
 else
-local_branch=`grep "${git_project}" default.xml |  grep "revision" | sed -n 's_^.*revision="\([^"]*\)".*_\1_gp'`
-if [ -z ${local_branch} ]
-then
-local_branch=${default_branch}
-fi
+local_branch=`check_branch "${git_project}" default.xml 2>/dev/null`
 fi
 debug local_branch: ${local_branch}
 result_line+="\t${local_branch}"
