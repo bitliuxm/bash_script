@@ -1,0 +1,213 @@
+#! /bin/bash
+
+
+# TODO: add board info in the ini file, and check the board info at runtime.
+
+
+# $1 smb path in windows format
+# $2 new ini file
+# $3 username
+# $4 passwd
+
+# ini is board-oriented
+# path should be in the format of  [\\<smb server>\ShareData\<path to the build>\Images\<target device>\]
+# \\10.0.1.110\Hudson\ShareData\CSDataRelease\Test_Products_Library\MocorDroid6.0_Trunk\MocorDroid6.0_Trunk_16b_W16.13.4\Images\sp7731c_1h10_32v4_native-user-native
+# <smb server> is \\10.0.1.110\Hudson
+# <target device> is sp7731c_1h10_32v4_native-user-native
+
+
+#read -r var
+#var='\\10.0.1.110\Hudson\ShareData\CSDataRelease\Test_Products_Library\MocorDroid6.0_Trunk\MocorDroid6.0_Trunk_16b_W16.13.4\IDH\manifest.xml'
+Smb_server='//10.0.1.110/Hudson'
+
+
+
+cleanup(){
+# TODO: get the entering path
+# TODO: should check if below file exist when script start
+rm device -rf
+rm vendor -rf
+}
+
+cleanup
+
+cat << EOF
+1, make sure the folder is clean
+2, the source ini file is in current folder, all ini file will be commit!!
+3, the spreadtrum domain username and passwd is need for smbclient
+EOF
+
+prompt_for_info(){
+echo -n "input user name of spreadtrum domain :"
+read -r User_name
+echo -n "input passwd of spreadtrum domain :"
+read -r -s Passwd
+echo
+}
+
+User_name='bit.liu'
+Passwd='16@Goal!'
+
+echo -n "input the pac path :"
+read -r var
+#echo ${User_name}
+#echo ${Passwd}
+#echo ${var}
+
+Ini_files=`find .  -maxdepth 1 -name "*.ini"`
+echo "below ini file will be commit:"
+echo ${Ini_files}
+echo -n "?[yes]:"
+read Is_ini_correct
+if [ -n "${Is_ini_correct}" ]
+then
+echo "abort!"
+exit
+fi
+
+# TODO: check the validation of var
+
+Exc_folder=`pwd`
+echo Exc_folder: ${Exc_folder}
+# TODO: cleanup the current folder when entering script
+
+#var='\\10.0.1.110\Hudson\ShareData\CSDataRelease\Test_Products_Library\MocorDroid6.0_Trunk\MocorDroid6.0_Trunk_16b_W16.13.4\Images\sp7731c_1h10_32v4_native-user-native'
+echo "pac path ${var}"
+Device_build_name=`echo ${var} | sed -n 's/^.*Images[\]\(.*\)/\1/gp'`
+Device_name=`echo "${Device_build_name}" | sed -n 's/^\([^-]*\).*/\1/gp'`
+echo Device_name: ${Device_build_name}
+
+Path_to_build=`echo ${var} | sed -n 's/^.*\(ShareData.*\)Images.*/\1/gp'`
+echo "${Path_to_build}"
+Manifest_filename='manifest.xml'
+Path_to_Manifest=${Path_to_build}"IDH\\"${Manifest_filename}
+echo "${Path_to_Manifest}"
+# smb usage:
+# smbclient //10.0.1.110/Hudson -U spreadtrum\\zhiming.yang%password
+smbclient -c "get ${Path_to_Manifest} ${Manifest_filename}" ${Smb_server} -U spreadtrum\\${User_name}%${Passwd}
+
+#  9   <project groups="sprd" name="device/sprd/docs" revision="53d3d29473ea671526934bc80011468b8990f51d" upstream="sprdroid6.0_trunk_16b"/>
+# 10   <project groups="sprd" name="device/sprd/iwhale2" revision="40fb0c6f668e9fd3a9596bc49ce2d768359c717e" upstream="sprdroid6.0_trunk_16b"/>
+# 11   <project groups="sprd" name="device/sprd/scx20" revision="0dbf2e1af192d37baa837ac0d9aef9487564ab33" upstream="sprdroid6.0_trunk_16b"/>
+# 12   <project groups="sprd" name="device/sprd/scx35" revision="3542824aba70f0740f1211617ba94e817b188a08" upstream="sprdroid6.0_trunk_16b"/>                                                                                                
+# 13   <project groups="sprd" name="device/sprd/scx35l" revision="a3f4b132a11252abb3eee0fcfd00617c96b9b34f" upstream="sprdroid6.0_trunk_16b"/>
+# 14   <project groups="sprd" name="device/sprd/scx35l64" revision="6fe9409937bdf0020b33a24eb78794f3c55e9e07" upstream="sprdroid6.0_trunk_16b"/>
+# 15   <project groups="sprd" name="device/sprd/whale" revision="18f97d4885c7ccfa7810003524ffc5d5baef71e3" upstream="sprdroid6.0_trunk_16b"/>
+
+device_keyword='device/sprd'
+device_projects=`grep ${device_keyword} ${Manifest_filename} | sed -n 's_^.*name="\([^"]*\)".*_\1_gp'`
+
+echo device_projects: ${device_projects}
+for device_project in ${device_projects}
+do
+
+echo device_project: ${device_project}
+local_branch=`check_branch "${device_project}" "${Manifest_filename}" upstream 2>/dev/null`
+echo local_branch: ${local_branch}
+
+# do the clone
+git-clone ${local_branch} ${device_project}
+
+# search for device mk
+#sp7731c_1h10_32v4_native-user-native
+Device_path=`find ${device_project} -name "${Device_name}.mk"`
+echo Device_path: ${Device_path}
+
+if [ -z ${Device_path} ]
+then
+continue
+else
+# end of find device_name.mk
+break
+fi
+done
+
+
+# method 1: using the "TARGET_BOARD := sp7731c_1h10_32v4" to get the board info, but some board just include others, will not have this macro in side
+# method 2: using the name of the folder
+Board_path="${Device_path%/*}"
+
+# TODO: only support marlin at this time, need to check which chip is used in BoardConfig.mk
+Wcn_chipset='marlin'
+
+check_chip(){
+if [[ ${local_branch} =~ .*k318.* ]]
+then
+#k318 
+true
+else
+#k310
+# using the BOARD_SPRD_WCNBT_MARLIN
+Is_marlin2=`grep -nr "BOARD_SPRD_WCNBT_MARLIN2" "${Board_path}/BoardConfig.mk"` 
+#if [ -z "${Is_marlin2}" ]
+fi
+}
+
+Board_name="${Board_path##*/}"
+echo Board_name: ${Board_name}
+
+#Is_k318=``
+#local_branch='sprdroid6.0_trunk_16b'
+if [[ ${local_branch} =~ .*k318.* ]]
+then
+echo k318 mode
+Ini_repo='vendor/sprd/proprietories-source/connconfig'
+Ini_relative_path=''
+else
+echo k310 mode
+# sample: vendor/sprd/open-source/res/connectivity/marlin/default/connectivity_configure.ini
+Ini_repo='vendor/sprd/open-source'
+Ini_relative_path='res/connectivity/'
+fi
+
+
+Ini_repo_branch=`check_branch "${Ini_repo}" "${Manifest_filename}" upstream 2>/dev/null`
+echo Ini_repo_branch: ${Ini_repo_branch}
+
+git-clone ${Ini_repo_branch} ${Ini_repo}
+
+## all the script can do is just move the file to certain path and commit for you.
+
+cd ${Ini_repo}/${Ini_relative_path}
+Board_relative_path=`find "${Wcn_chipset}" -name ${Board_name}`
+if [ -z "${Board_relative_path}" ]
+then
+# board not exist
+mkdir -p ${Wcn_chipset}/${Board_name}
+fi
+
+for Ini_file in ${Ini_files}
+do
+cp "${Exc_folder}/${Ini_file}" "${Wcn_chipset}/${Board_name}/${Ini_file}"
+done
+
+# add hook
+Git_user=`git config user.name`
+gitdir=$(git rev-parse --git-dir); scp -p -P 29418 ${Git_user}@review.source.spreadtrum.com:hooks/commit-msg ${gitdir}/hooks/
+
+# disable the autocrlf, this will maintain the crlf in ini files 
+git config core.autocrlf false
+
+git add "${Wcn_chipset}/${Board_name}"
+
+# we just generate a template file now, so the root template file is not used
+check_root_template(){
+if [ -e "$HOME/.commit_template" ]
+then
+cp "$HOME/.commit_template" "${Exc_folder}/.commit_template"
+fi
+}
+
+cat > "${Exc_folder}/.commit_template" << EOF
+Bug #0 update ini file for ${Board_name}
+
+[root cause  ]update ini file for ${Board_name}
+[changes     ]yes
+[side effects]no
+[self test   ]<board, Test cases summary>:${Board_name},bt_on
+[reviewers   ] 
+EOF
+
+git commit -F ${Exc_folder}/.commit_template
+git-push
+
