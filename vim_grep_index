@@ -1,0 +1,109 @@
+#! /bin/bash
+
+#vimi
+# $1 is index, 1 based
+# $2 is grep command
+
+# fc -ln can not be used properly in script
+
+#alias grep='grep  --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn}'
+
+
+a() {
+if [ -z "$2" ]
+then
+# user shell is zsh, get the command history from ~/.zsh_history 
+# get the last grep command out of last 10 command
+#command=`tail -10 ~/.zsh_history | sort -t : -n -k1 -r | awk -F ":" '{$1="" ; $2="" ; print $0}' | awk -F ";" '{$1="" ; print $0 }' | sed "2! d" `
+command=`tail -10 ~/.zsh_history | sort -t : -n -k1 -r | awk -F ":" '{$1="" ; $2="" ; print $0}' | awk -F ";" '{$1="" ; print $0 }' | grep "^\s*grep" | head -1 `
+else
+command="$2"
+fi
+
+echo command: "${command}"
+#${command}
+
+#a() {
+#result=`${command}`; echo ${result}
+##echo result: ${result}
+
+middle=`${command} | sed "$1! d"`
+echo  middle: ${middle}
+
+filename=`${command} | sed "$1! d" | awk -F ':' '{print $1}' `
+fileline=`${command} | sed "$1! d" | awk -F ':' '{print $2}' `
+echo filename: ${filename}
+echo fileline: ${fileline}
+vim ${filename} "+${fileline}"
+#}
+}
+
+b() {
+a=10
+b=20
+val=`expr $a + 1`
+echo "a + b : $val"
+exit
+}
+
+c() {
+a=1
+b=1
+if [ $a == $b ]
+then
+    echo "a"
+fi
+exit
+}
+
+#index=1 ; val=`expr ${index}+1` ; echo ${val}
+
+#############################################################
+#read cached instead of rerun the command
+# $1 will be the index
+
+# the format of grep_cache.txt is
+# ^index:filename:fileline:include $(BUILD_STATIC_LIBRARY)
+
+echo '$1': $1
+
+index=0
+IFS=$'\n'
+for line in $(cat ~/grep_cache.txt)
+do
+
+index=`expr ${index} + 1`
+echo index: ${index}
+if [ ${index} == $1 ]
+then
+    #TODO: add support to -A 5 -B 5
+##outputsample
+
+#btcore/include/bdaddr.h-49-const char *bdaddr_to_string(const bt_bdaddr_t *addr, char *string, size_t size);
+#btcore/include/bdaddr.h-50-
+#btcore/include/bdaddr.h:51:// Returns true if |string| represents a Bluetooth address. |string| may not be NULL.
+#btcore/include/bdaddr.h-52-bool string_is_bdaddr(const char *string);
+#btcore/include/bdaddr.h-53-
+#btcore/include/bdaddr.h-54-// Converts |string| to bt_bdaddr_t and places it in |addr|. If |string| does not
+#btcore/include/bdaddr.h:55:// represent a Bluetooth address, |addr| is not modified and this function returns
+#btcore/include/bdaddr.h-56-// false. Otherwise, it returns true. Neither |string| nor |addr| may be NULL.
+#btcore/include/bdaddr.h-57-bool string_to_bdaddr(const char *string, bt_bdaddr_t *addr);
+
+    #if [ -z ${filename} -a -z ${fileline} ]
+true
+else
+continue
+fi
+
+echo line: ${line}
+echo endofline
+filename=`echo ${line} | awk -F ':' '{print $2}'`
+echo filename: ${filename}
+fileline=`echo ${line} | awk -F ':' '{print $3}'`
+echo fileline: ${fileline}
+vim ${filename} "+${fileline}"
+break
+done
+
+
+

@@ -1,0 +1,10 @@
+#! /bin/bash
+
+#grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn} $@  |tee  ~/grep_cache.txt
+echo $@
+grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn} $@  | sed '/./=' | sed '/./N; s/\n/:/' | tee ~/grep_cache.txt
+
+
+
+
+
