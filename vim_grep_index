@@ -73,7 +73,6 @@ for line in $(cat ~/grep_cache.txt)
 do
 
 index=`expr ${index} + 1`
-echo index: ${index}
 if [ ${index} == $1 ]
 then
     #TODO: add support to -A 5 -B 5
@@ -94,6 +93,7 @@ true
 else
 continue
 fi
+echo index: ${index}
 
 echo line: ${line}
 echo endofline

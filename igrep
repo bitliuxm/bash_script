@@ -1,8 +1,19 @@
 #! /bin/bash
 
 #grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn} $@  |tee  ~/grep_cache.txt
-echo $@
-grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn} $@  | sed '/./=' | sed '/./N; s/\n/:/' | tee ~/grep_cache.txt
+
+#for var in $@
+#do
+    #echo ${var}
+#done
+
+option=$1
+echo option: ${option}
+pattern=$2
+echo pattern: ${pattern}
+shift 2 
+echo files: $@
+grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn} "${option}" "${pattern}" $@  | sed '/./=' | sed '/./N; s/\n/:/' | tee ~/grep_cache.txt
 
 
 
