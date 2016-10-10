@@ -1,0 +1,67 @@
+# need to use sudo 
+sudo apt-get update
+sudo apt-get install openssh-server
+mkdir workspace
+sudo apt-get install samba --fix-missing
+sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.default
+sudo apt-get install vim-nox
+sudo apt-get install adb
+sudo apt-get install zsh
+sudo apt install shadowsocks
+
+
+sudo add-apt-repository ppa:hzwhuang/ss-qt5
+sudo apt-get update
+sudo apt-get install shadowsocks-qt5
+
+sudo apt-get install tsocks
+
+
+# try to fetch the github
+mkdir -p ~/workspace/github/
+git clone https://git.coding.net/scaffrey/hosts.git ~/workspace/github/hosts
+sudo mv /etc/hosts  /etc/hosts.default
+sudo cp ~/workspace/github/hosts/hosts /etc/hosts
+
+# git clone 
+tsocks git clone https://github.com/bitliuxm/bash_script.git ~/workspace/github/bash_script
+tsocks git clone https://github.com/bitliuxm/config.git ~/workspace/github/config
+
+# make ln for all script
+mkdir -p ~/bin
+~/workspace/github/bash_script/make_ln_all ~/bin
+
+
+#if github is not available, then use scp
+#scp -r 192.168.19.128:/home/bit/workspace1/github /home/bit/workspace/github2
+#scp -r 192.168.19.128:/home/bit/.oh-my-zsh  /home/bit/.oh-my-zsh
+#scp -r 192.168.19.128:/home/bit/.spf13-vim-3  /home/bit/.spf13-vim-3
+#scp -r 192.168.19.128:/home/bit/.vim  /home/bit/.vim
+
+
+rm ~/.bashrc
+rm ~/.zshrc
+ln -s /home/bit/workspace/github/config/gitconfig ~/.gitconfig
+ln -s /home/bit/workspace/github/config/zshrc ~/.zshrc
+ln -s /home/bit/workspace/github/config/bashrc ~/.bashrc
+
+sudo rm /etc/tsocks.conf
+sudo ln -s /home/bit/workspace1/github/config/tsocks.conf /etc/tsocks.conf
+sudo rm /etc/samba/smb.conf
+sudo ln -s /home/bit/workspace1/github/config/smb.conf /etc/samba/smb.conf
+sudo rm /etc/hosts
+sudo ln -s /home/bit/workspace1/github/hosts/hosts /etc/hosts
+
+#oh-my-zsh
+wget https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh > ~/workspace/install_ohmyzsh.sh
+chmod +x ~/workspace/install_ohmyzsh.sh
+
+chsh -s /bin/zsh
+
+#vim spf13 install, should only be excute as user
+#curl https://j.mp/spf13-vim3 -L > ~/workspace/install_spf13.sh
+#chmod +x ~/workspace/install_spf13.sh
+#~/workspace/install_spf13.sh
+# echo manually modify the /home/bit/.vimrc.bundles:94
+
+
