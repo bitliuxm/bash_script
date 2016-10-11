@@ -12,5 +12,7 @@
 # By default this script does nothing.
 
 sudo mount -t cifs //192.168.19.1/d /home/bit/mnt_win -o noperm,rw,iocharset=utf8,username='bit.liu',password='ZS2016!@#',dir_mode=0777,file_mode=0777,uid=bit,gid=bit,_netdev
+#nohup sslocal -c /home/bit/workspace1/github/config/sg.json &
+#nohup sslocal -c /home/bit/workspace1/github/config/jp0.json &
 
 exit 0
