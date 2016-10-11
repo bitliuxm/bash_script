@@ -16,6 +16,8 @@ sudo apt-get install shadowsocks-qt5
 
 sudo apt-get install tsocks
 
+# move the sslocal@myserver.service to /lib/systemd/system and link to etc/systemd/system/multi-user.target.wants/
+sudo ln -s /lib/systemd/system/sslocal@myserver.service /etc/systemd/system/multi-user.target.wants/sslocal@myserver.service
 
 # try to fetch the github
 mkdir -p ~/workspace/github/
@@ -63,5 +65,5 @@ chsh -s /bin/zsh
 #chmod +x ~/workspace/install_spf13.sh
 #~/workspace/install_spf13.sh
 # echo manually modify the /home/bit/.vimrc.bundles:94
-
+# after apply patch need to BundleInstall / BundleClean
 
