@@ -28,6 +28,7 @@ sudo cp ~/workspace/github/hosts/hosts /etc/hosts
 # git clone 
 tsocks git clone https://github.com/bitliuxm/bash_script.git ~/workspace/github/bash_script
 tsocks git clone https://github.com/bitliuxm/config.git ~/workspace/github/config
+tsocks git clone https://github.com/powerline/fonts.git ~/workspace/github/fonts
 
 # make ln for all script
 mkdir -p ~/bin
@@ -67,3 +68,18 @@ chsh -s /bin/zsh
 # echo manually modify the /home/bit/.vimrc.bundles:94
 # after apply patch need to BundleInstall / BundleClean
 
+
+# python markdown setup
+#wget http://peak.telecommunity.com/dist/ez_setup.py
+#sudo python ez_setup.py
+#sudo easy_install pip
+#sudo easy_install markdown
+#sudo pip install pymdown-extensions
+#sudo pip install PyYAML 
+#sudo pip install Pygments
+
+
+## below is from echo >> 
+
+sudo apt-get install policycoreutils
+sudo ln -s   /home/bit/workspace1/github/config/crontab_user  /var/spool/cron/crontabs/bit
