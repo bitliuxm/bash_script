@@ -1,0 +1,131 @@
+#!/bin/bash
+set -e
+
+manifest_branch_disp_name()
+{
+	if [ -f "$1" ]; then
+		echo "manifest$2"	# Manifest, need better name for display
+	else
+		echo "$1"	# Branch, just use it for display
+	fi
+}
+
+usage()
+{
+cat << EOF
+Compare project/commit differences between two manifest.xml or branches
+
+Usage:
+$0 [-l] [-q] <branch1|manifest1.xml> <branch2|manifest2.xml> [output_file]
+
+	output_file: Save to output_file if specified
+	-l: Checkout from local branch only
+	-q: No confirmation before running repo-clean
+	-h: This usage message
+EOF
+	exit 1
+}
+
+# checkout branch_name branch_display_name repo_list_file
+checkout_manifest_branch()
+{
+	#repo-checkout $local_param $1
+	repo sync $local_param -d -c -j4 --no-tags -m "$1"
+	repo forall -c "git tag -f repo_compare_$2 2>/dev/null"
+	repo list > $3
+}
+
+cleanup()
+{
+	rc=$?
+	[ -n $list1 ] && rm -f $list1
+	[ -n $list2 ] && rm -f $list2
+	exit $rc
+}
+
+echo_out()
+{
+	echo "$*" >> $output_file
+}
+
+local_param=
+quiet=
+while getopts “hlq” OPTION
+do
+	case $OPTION in
+		h)
+			usage
+			;;
+		l)
+			local_param=-l
+			;;
+		q)
+			quiet=1
+			;;
+		?)
+			usage
+			;;
+	esac
+done
+
+shift $(($OPTIND - 1))
+
+if [ "$1" == "--help" -o $# -lt 2 -o $# -gt 3 ]; then
+	usage
+fi
+
+manifest_branch1=$1
+manifest_branch2=$2
+
+disp1=$(manifest_branch_disp_name $manifest_branch1 1)
+disp2=$(manifest_branch_disp_name $manifest_branch2 2)
+
+list1=$(mktemp)
+list2=$(mktemp)
+
+trap 'cleanup' HUP INT QUIT BUS PIPE TERM
+
+output_default=repo-compare.diff
+output_file=${3-$output_default}
+
+if [ "$quiet" != "1" ]; then
+	cat << EOF
+This script need to run clean up scripts as below in current repo dir to be able to successfully checkout a branch/manifest file.
+$ repo forall -p -c "git checkout .; git clean -d -f"
+To avoid losing locally modified changes, choose 'n' below.
+EOF
+	input=
+	read -p "Continue? (y/n)" input
+	case "$input" in
+		y) ;;
+		*) exit 1;;
+	esac
+fi
+
+repo forall -p -c "git checkout .; git clean -d -f"
+checkout_manifest_branch $manifest_branch2 $disp2 $list2
+checkout_manifest_branch $manifest_branch1 $disp1 $list1
+
+pwd
+echo Generating branch diff summary...
+rm -f $output_file
+
+echo_out --- $disp1
+echo_out +++ $disp2
+echo_out 
+echo_out Added/Removed projects:
+echo_out =======================
+echo_out
+
+/usr/bin/diff -u $list1 $list2 |perl -nle "if (/^[-+][^-+]/) { s/^\+/+   /; s/^-/-   /; print }" |LC_ALL=C sort >> $output_file
+
+echo_out 
+echo_out Changes in each project:
+echo_out ========================
+echo_out
+
+repo forall -p -c git log --left-right --cherry-pick --date=short --pretty='%m   %h %s (%an) (%cd)' repo_compare_${disp1}...repo_compare_${disp2}| \
+	sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | 	# ansi2txt \
+	perl -ple 's/^>/+/; s/^</-/' >> $output_file	# Convert > to + and < to -
+
+echo Done.

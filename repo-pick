@@ -1,0 +1,631 @@
+#!/usr/bin/python
+#Script to Mange patch picking between two branches of repo
+#Todo:
+# 1. case insensitive p, i, etc.
+# 2. Make tohtml work again
+
+import os
+import sys
+import re
+import getopt
+import subprocess
+import cgi
+
+# Defines
+GIT = 'git' # our git command
+CONTINUE_FILE = "/tmp/repo_diff_continue_spot" # file to save continue spot info
+
+class GitFailure(Exception):
+    """Indicate git command failed."""
+
+class ProjectNotFound(Exception):
+    """The project specified is not found."""
+
+class Project:
+    class Action:
+        """Project Action
+           None: default merge action
+           'i': Ignore this project
+        """
+        Default = None
+        Ignore = 'i'
+
+    def __init__(self, name, action=None):
+        self.name = name
+        self.action = action
+        self.commits = []
+
+    def add_commit(self, commit):
+        self.commits.append(commit)
+
+    def merge(self, proj, options):
+        assert(self.name == proj.name)
+        self.action = proj.action
+
+        print "project %s" % proj.name
+        # Stupid but simple merging
+        for cm0 in self.commits:
+            for cm1 in proj.commits:
+                if cm0.revid == cm1.revid:
+                    cm0.merge(cm1, options)
+        print ""
+
+    def __repr__(self):
+        return repr([self.name, self.action, self.commits])
+
+    def __str__(self):
+        action_str = ""
+        if self.action == Project.Action.Ignore:
+            action_str = " (i)"
+        return "project %s%s" % (self.name, action_str)
+
+class Commit:
+    class Ptype:
+        """Ptype: '-'/'+' => removed / added patches"""
+        Removed = '-'
+        Added = '+'
+
+    class Status:
+        """Status: ' ':Default, 'm':can't directly apply, need Manual apply,
+        'c':Clean apply"""
+        Default = ' '
+        Clean = 'c'
+        Manual = 'm'
+
+    class Action:
+        """Action: ' ':Default no action, 'h':Hold this patch, 'p':Apply patch, 'i':Ignored,
+        'm':Already merged"""
+        Default = ' '
+        Hold = 'h'
+        Pick = 'p'
+        Ignore = 'i'
+        Merged = 'm'
+        Uncertain = "?"
+
+    def __init__(self, args):
+        """revid: Revision hash id"""
+        (self.ptype, self.action, self.status, self.revid, self.title, self.author, self.date) = args
+
+    def merge(self, commit, options):
+        #FIXME: Add Conflict status in repo diff file instead of just output warnings here
+        assert(self.revid == commit.revid)
+        # Only if there is any change
+        if self.action != commit.action or self.status != commit.status:
+            if self.action == Commit.Action.Default:
+                print "Updated\t%s %s%s" % (commit.revid, commit.action, commit.status)
+                self.action = commit.action
+                self.status = commit.status
+            elif commit.action != Commit.Action.Default:
+                if "--force" in options:
+                    s = "Force Updated"
+                else:
+                    s = "Conflicted"
+
+                print "%s\t%s %s%s => %s%s" % (s, commit.revid, self.action, self.status, \
+                                                commit.action, commit.status)
+
+                if "--force" in options:
+                    self.action = commit.action
+                    self.status = commit.status
+
+
+    def __repr__(self):
+        return repr((self.ptype, self.action, self.status, self.revid, self.title, self.author, self.date))
+
+    def __str__(self):
+        return "%s%s%s %s %s (%s) (%s)" % (self.ptype, self.action,
+                                           self.status, self.revid, self.title, self.author, self.date)
+
+class ContinueSpot:
+    """Holds the Continue project and commit"""
+    def __init__(self, proj_name = "", cm_revid = ""):
+        self.proj_name = proj_name
+        self.cm_revid = cm_revid
+
+    def load(self):
+        lines = file(CONTINUE_FILE).readlines()
+        self.proj_name = lines[0].strip()
+        self.cm_revid = lines[1].strip()
+
+    def save(self):
+        f = file(CONTINUE_FILE, "w")
+        f.write(self.proj_name + "\n")
+        f.write(self.cm_revid + "\n")
+
+class RepoHtmlConverter:
+    """Parse and convert repo diff file"""
+    def __init__(self, branch, style = 0):
+        self._re_string = re.compile(r'(?P<htmlchars>[<&>])|(?P<space>[ \t]+)|(?P<lineend>\r\n|\r|\n)|(\s|$)', re.S|re.M|re.I)
+        self._commit_url_tmpl = "http://10.38.32.231/gitweb/?p=%s/%s.git;a=commitdiff;h=%s"
+        self._branches = {
+            "ics" : "pxa920-ics",
+            "gb" : "rls_dkbtd_gingerbread_beta5.1",
+        }
+        self._branchname = self._branches[branch]
+
+        self._style = style
+        self._stylesheets = [
+"""
+<style type="text/css">
+    body {
+        font-family: monospace;
+        border: solid #d9d8d1;
+        border-width: 1px;
+        margin: 10px;
+        background-color: #ffffff;
+        color: #000000;
+    }
+    div.compare_from {
+        font-weight: bold;
+        color: #888888;
+    }
+    div.compare_to {
+        font-weight: bold;
+        color: #008800;
+        background-color: #f6f5ee;
+    }
+    div.project {
+        font-weight: bold;
+
+        background-color: #edece6;
+
+        margin-top: 4px;
+        padding: 4px 0px 2px 0px;
+        border: solid #d9d8d1;
+        border-width: 1px 0px 1px 0px;
+    }
+    div.commit_rem {
+        color: #888888;
+    }
+    div.commit_add {
+        color: #008800;
+        background-color: #f6f5ee;
+    }
+    a.commit_rem {
+        text-decoration: underline;
+        color: #888888;
+    }
+    a.commit_rem:visited {
+        text-decoration: none;
+        color: #888888;
+    }
+    a.commit_rem:hover {
+        text-decoration: underline;
+        color: #880000;
+    }
+    a.commit_add {
+        text-decoration: underline;
+        color: #008800;
+    }
+    a.commit_add:visited {
+        text-decoration: none;
+        color: #008800;
+    }
+    a.commit_add:hover {
+        text-decoration: underline;
+        color: #880000;
+    }
+</style>
+""",
+        ]
+
+    def html_header(self):
+        return """
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-US" lang="en-US">
+<!-- Generated by repo-pick -->
+<head>
+<meta http-equiv="content-type" content="application/xhtml+xml; charset=utf-8"/>
+<title>Repo Compare</title>
+%s
+</head>
+<body>
+""" % self._stylesheets[self._style]
+
+    def html_footer(self):
+        return """
+</body>
+</html>
+"""
+
+    def convert_header(self, header):
+        s = ""
+        for line in header:
+            if line[:3] == '---':
+                s += self._conv_div(line, "compare_from")
+            elif line[:3] == '+++':
+                s += self._conv_div(line, "compare_to")
+            elif line[:1] == '-':
+                s += self._conv_div(line, "commit_rem")
+            elif line[:1] == '+':
+                s += self._conv_div(line, "commit_add")
+            else:
+                s += self._conv_normal(line)
+        return s
+
+    def convert_projects(self, projects):
+        s = ""
+        for proj in projects:
+            s += self._conv_div(str(proj), "project")
+            for cm in proj.commits:
+                if cm.ptype == Commit.Ptype.Removed:
+                    s += self._conv_commit(proj, cm, "commit_rem")
+                elif cm.ptype == Commit.Ptype.Added:
+                    s += self._conv_commit(proj, cm, "commit_add")
+
+            s += self._conv_normal("\n")
+
+        return s
+
+    def _conv_normal(self, line):
+        return self._text2html(line) + "\n"
+
+    def _conv_commit(self, proj, commit, class_name):
+        s = self._text2html(str(commit))
+        url = self._commit_url_tmpl % (self._branchname, proj.name, commit.revid)
+        return "<div class=\"" + class_name + "\">"  + \
+                s.replace(commit.revid, "<a href=\"%s\" class=\"%s\">%s</a>" % (url, class_name, commit.revid)) \
+                + "</div>" + "\n"
+
+    def _conv_div(self, line, class_name):
+        return "<div class=\"" + class_name + "\">"  + self._text2html(line) + "</div>" + "\n"
+
+    def _text2html(self, text, tabstop = 4):
+        """Convert plain text file to html
+           Copied from here: http://djangosnippets.org/snippets/19
+        """
+        def do_sub(m):
+            c = m.groupdict()
+            if c['htmlchars']:
+                return cgi.escape(c['htmlchars'])
+            if c['lineend']:
+                return '<br>'
+            if c['space']:
+                t = m.group().replace('\t', '&nbsp;'*tabstop)
+                t = t.replace(' ', '&nbsp;')
+                return t
+        return re.sub(self._re_string, do_sub, text)
+
+class RepoDiff:
+    """Reprent a Repo diff file/database"""
+    def __init__(self, diff_file):
+        self.header = []
+        self.projects = []
+        self.load(diff_file)
+
+    def load(self, diff_file):
+        """Parse repo diff file to header and projects"""
+        self.diff_file = diff_file
+        f = file(diff_file)
+
+        commit_pattern = re.compile(r"^([+-])(.)(.) +([0-9a-f]+) (.+) \((.+)\) \((.+)\).*")
+        proj_pattern = re.compile(r"^project[ \t]+(\S+)([ \t]+\((.+)\))?")
+        state="header"
+        for line in f:
+            m = re.match(proj_pattern, line)
+            if m:   # Matched project line
+                if state == "project":
+                    self.projects.append(proj)    # Last project has no "project end" blank line, add that project anyway
+                state = "project"
+                proj = Project(m.groups()[0], m.groups()[2]) # project name and ignore status
+                continue
+
+            if state == "project":
+                m = re.match(commit_pattern, line)
+                if m:
+                    proj.add_commit(Commit(m.group(1, 2, 3, 4, 5, 6, 7)))
+                elif re.match("^[ \t\r\n]*$", line):
+                    state = "project_end"
+                    self.projects.append(proj)
+                else:
+                    print "Error: Can't parse line: %s" % line
+                continue
+
+            if state == "header":
+                self.header.append(line)
+                continue
+
+        # handle last project if any
+        if state == "project":
+            self.projects.append(proj)
+
+        f.close()
+
+    def dump(self):
+        print "Header:"
+        print self.header
+
+        print "Projects:"
+        for p in self.projects:
+            print repr(p)
+
+    def merge(self, repo_diff, options):
+        # Use simple and slow algrithm since we don't have too many projects
+        for p0 in self.projects:
+            for p1 in repo_diff.projects:
+                if p0.name == p1.name:
+                    p0.merge(p1, options)
+
+    def save(self, new_file = None):
+        if new_file:
+            diff_file = new_file
+        else:
+            diff_file = self.diff_file
+
+        f = file(diff_file, "w")
+        for line in self.header:
+            f.write(line)
+
+        for proj in self.projects:
+            # See the __str__ function of Project and Commit
+            f.write("%s\n" % proj)
+            for cm in proj.commits:
+                f.write("%s\n" % cm)
+
+            f.write("\n")
+
+        f.close()
+
+    def tohtml(self, branch, style = 0):
+        """Return htmlized string of repo diff file"""
+        s = ""
+        converter = RepoHtmlConverter(branch, style)
+
+        s += converter.html_header()
+        s += converter.convert_header(self.header)
+
+        s += converter.convert_projects(self.projects)
+        s += converter.html_footer()
+        return s
+
+    def action_pick(self, commits, proj, continue_spot = None):
+        """Perform git cherry-pick on the list of commits
+        @commits: the commits set to apply this action
+        @proj: the project object
+        @continue_spot: ContinueSpot object, None means not continuing from last failure
+        """
+
+        # Ignore project that has been marked as this:
+        # /project/name/ (i)
+        if proj.action == Project.Action.Ignore:
+            print "Project %s ignored" % proj.name
+            return
+
+        continue_revid = None
+        if continue_spot:
+            continue_revid = continue_spot.cm_revid
+
+        # Save current project name
+        new_cont_spot = ContinueSpot(proj.name, "")
+        new_cont_spot.save()
+
+        stop = False
+        for commit in commits:
+            i = proj.commits.index(commit)
+
+            print commit.revid
+            if commit.revid == continue_revid:
+                print "Commit mannually fixed, set to merged and skip"
+                proj.commits[i].action = Commit.Action.Merged
+                continue
+
+            cmd = [GIT, 'cherry-pick', commit.revid]
+
+            proc = subprocess.Popen(cmd)
+
+            if proc.wait() != 0:
+                print "Error: Cherry-pick of commit << %s >> failed, please follow these steps:" % commit.revid
+                print "1. Manually resolve the conflicts"
+                print "2. Run 'git cherry-pick --continue' to continue the rebasing"
+                print "   Or 'git cherry-pick --skip' to skip this commit"
+                print "3. Run '%s pick --continue <repo_diff_file>' to finish the repo picking process" % os.path.basename(sys.argv[0])
+                print ""
+                print "Current project: %s" % proj.name
+
+                proj.commits[i].status = Commit.Status.Manual
+                new_cont_spot.cm_revid = proj.commits[i].revid
+
+                stop = True
+                break
+            else:
+                proj.commits[i].action = Commit.Action.Merged
+                proj.commits[i].status = Commit.Status.Clean
+
+        cmd = [GIT, 'branch', '-f', 'repo_picked']
+
+        proc = subprocess.Popen(cmd, stdout = subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        out = proc.stdout.read()
+        proc.stdout.close()
+
+        err = proc.stderr.read()
+        proc.stderr.close()
+
+        if proc.wait() != 0:
+            print >>sys.stderr
+            print >>sys.stderr, out
+            print >>sys.stderr, err
+            print >>sys.stderr
+            raise GitFailure(cmd)
+
+        new_cont_spot.save()
+        self.save()
+
+        if stop:
+            sys.exit(1)
+
+    def project_index(self, proj_name):
+        """Returns the index in projects list, and similar to list .index()
+        function, it raises ValueError if proj is not found.
+        """
+        for i, proj in enumerate(self.projects):
+            if proj.name == proj_name:
+                return i
+
+        raise ValueError()
+
+    def _apply_action_project(self, action, proj, repodir, continue_spot = None):
+        """Apply action to one project"""
+        #Prepare commits to apply
+        cm_to_pick = filter(lambda c: (c.ptype == Commit.Ptype.Added and
+                                       c.action == Commit.Action.Pick), proj.commits)
+        cm_to_pick.reverse()
+
+        if cm_to_pick:
+            os.chdir(proj.name)
+            print os.getcwd()
+
+            action(cm_to_pick, proj, continue_spot)
+            os.chdir(repodir)
+
+    def apply_action(self, action, proj_list, continue_spot = None):
+        # Find .repo folder
+        while (not os.path.isdir(".repo")) and os.getcwd() != '/':
+            os.chdir(os.path.pardir)
+
+        if not os.path.isdir(".repo"):
+            raise IOError(".repo folder not found")
+
+        repodir = os.getcwd()
+        print "Start in repo dir %s..." % (repodir)
+
+        if proj_list:   # Find the index the last failed project in projects
+            for proj_name in proj_list:
+                if proj_name[-1] != '/':
+                    proj_name += '/'
+                try:
+                    index = self.project_index(proj_name)
+                except ValueError:
+                    raise ProjectNotFound(proj_name)
+
+                self._apply_action_project(action, self.projects[index], repodir, continue_spot)
+        else:   # No proj_list specified, go through the whole list (or continue from last failed project)
+            start = 0
+            if continue_spot:
+                try:
+                    start = self.project_index(continue_spot.proj_name)
+                except ValueError:
+                    raise ProjectNotFound(proj_name)
+
+            for proj in self.projects[start:]:
+                print proj
+                self._apply_action_project(action, proj, repodir, continue_spot)
+
+        print "Done"
+
+    def find_author(self):
+        pass
+
+def usage():
+    print """Usage:
+%s [pick|update|tohtml|merge] [options]
+
+pick [--continue] <repo_diff_file> [project_dir ...]
+    Pick patches based on input from repo diff file
+
+    --continue: Continue from last failed pick of commits
+    project_dir: Optionally specify the projects to apply pick action on
+
+update <repo_diff_file>
+    Update repo diff file with commit status
+
+tohtml [--branch ics|gb] <repo_diff_file> [output_html_file]
+    Convert repo diff file to HTML format
+
+    --branch ics|gb: Specify which Android branch to use for commit URL conversion,
+    default value is ics
+    output_html_file: Optionally specify the output html file name
+
+merge [--force] <target_repo_diff_file> <old_repo_diff_file>
+    Merge project and commit action/status from old repo diff file
+
+    --force: Force update target repo diff file even there are conflicts
+
+""" % (os.path.basename(sys.argv[0]))
+    sys.exit(1)
+
+def main():
+    if len(sys.argv) <= 1:
+        usage()
+
+    args = sys.argv[1:]
+    action = args.pop(0)
+    if action == 'pick':
+        try:
+            optlist, args = getopt.getopt(args, '', ['continue'])
+        except getopt.error:
+            usage()
+        if not args:
+            usage()
+
+        continue_spot = None
+        for (opt, arg) in optlist:
+            if opt == '--continue':
+                continue_spot = ContinueSpot()
+                continue_spot.load()
+
+        repo_diff = RepoDiff(os.path.abspath(args.pop(0)))
+        #repo_diff.dump()
+
+        proj_list = args    # The reset are project lists
+
+        repo_diff.apply_action(repo_diff.action_pick, proj_list, continue_spot)
+
+    elif action == 'update':
+        if not args:
+            usage()
+
+        #FIXME: Implement this
+        #ToDo: Update with current compared HEADs
+        repo_diff = RepoDiff(args[0])
+        #repo_diff.dump()
+        repo_diff.save()
+
+    elif action == 'tohtml':
+        try:
+            optlist, args = getopt.getopt(args, '', ['branch='])
+        except getopt.error:
+            usage()
+
+        if not args or len(args) > 2:
+            usage()
+
+        branch = "ics"
+        for (opt, arg) in optlist:
+            if opt == '--branch':
+                branch = arg
+
+        output = args[0] + ".html"
+        if len(args) == 2:
+            output = args[1]
+
+        repo_diff = RepoDiff(args[0])
+
+        f = file(output, "w")
+        f.write(repo_diff.tohtml(branch))
+        f.close()
+
+    elif action == 'merge':
+        try:
+            optlist, args = getopt.getopt(args, '', ['force'])
+        except getopt.error:
+            usage()
+
+        if (not args) or len(args) != 2:
+            usage()
+
+        diff_target = RepoDiff(args[0])
+        diff_old = RepoDiff(args[1])
+
+        diff_target.merge(diff_old, [opt for (opt, arg) in optlist])
+
+        #diff_target.dump()
+        diff_target.save()
+    elif action == 'find-arthur':
+        pass
+    else:
+        print "Error: Unsupported action: %s" % action
+        usage()
+
+if __name__=='__main__':
+    main()

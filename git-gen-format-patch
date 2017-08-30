@@ -1,0 +1,12 @@
+#!/bin/bash
+# Usage:
+# $0 <old_tag> <new_tag> <output_dir>
+# Usually <output_dir> contains $REPO_PATH
+
+old_tag="$1"
+new_tag="$2"
+output_dir="$3"
+
+mkdir -p "$output_dir"
+
+git format-patch --no-binary -o "$output_dir" ${old_tag}..${new_tag}
