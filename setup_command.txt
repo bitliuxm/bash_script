@@ -43,10 +43,10 @@ ln -sf ~/workspace/github/config/zshrc ~/.zshrc
 ln -sf ~/workspace/github/config/bashrc ~/.bashrc
 ln -sf ~/workspace/github/tmux-config/.tmux.conf ~/.tmux.conf
 
-sudo rm /etc/tsocks.conf
-sudo ln -sf /home/bit/workspace1/github/config/tsocks.conf /etc/tsocks.conf
-sudo rm /etc/samba/smb.conf
-sudo ln -sf /home/bit/workspace1/github/config/smb.conf /etc/samba/smb.conf
+#sudo rm /etc/tsocks.conf
+#sudo ln -sf /home/bit/workspace1/github/config/tsocks.conf /etc/tsocks.conf
+#sudo rm /etc/samba/smb.conf
+#sudo ln -sf /home/bit/workspace1/github/config/smb.conf /etc/samba/smb.conf
 #hosts can not use ln
 #sudo rm /etc/hosts
 #sudo ln -sf /home/bit/workspace1/github/hosts/hosts /etc/hosts
