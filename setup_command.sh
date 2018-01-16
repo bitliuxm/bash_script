@@ -83,7 +83,7 @@ sudo cp sources.list /etc/apt/sources.list
 # need to use sudo 
 sudo apt-get update
 sudo apt-get install -y openssh-server
-mkdir workspace
+mkdir ~/workspace
 sudo apt-get install -y vim-nox
 sudo apt-get install -y adb
 sudo apt-get install -y curl
