@@ -20,6 +20,7 @@ s add ss and tsock support
 h host support
 z zsh and oh my zsh support
 t tmux
+p python and pip app(bypy markdown) support
 m misc support // all others
 +--------------------------------------------------------------+
 EOF
@@ -53,6 +54,9 @@ EOF
       "t")
 		TMUX_SUPPORT=1
         ;;
+      "p")
+		PYTHON_APP_SUPPORT=1
+        ;;
       "m")
 		MISC_SUPPORT=1
         ;;
@@ -72,6 +76,10 @@ EOF
 
 if [ -n "$BASIC$ALL" ]
 then
+# update sources.list
+sudo mv /etc/apt/sources.list /etc/apt/sources.list.backup
+sudo cp sources.list /etc/apt/sources.list
+
 # need to use sudo 
 sudo apt-get update
 sudo apt-get install -y openssh-server
@@ -158,6 +166,9 @@ if [ -n "$VIM_SPF13_SUPPORT" ]
 then
 # spf13
 # vim spf13 install, should only be excute as user
+sudo apt-get install -y ack-grep
+sudo apt-get install -y exuberant-ctags
+#vim spf13 install, should only be excute as user
 chmod +x ~/workspace/github/config/install_spf13.sh
 ~/workspace/github/config/install_spf13.sh
 ln -sf ~/workspace/github/config/.vimrc.bundles.local ~/.vimrc.bundles.local
@@ -167,14 +178,36 @@ fi
 
 if [ -n "$MISC_SUPPORT" ]
 then
+
+# for bash check
+sudo apt-get install shellcheck
+
 # for android build server
 sudo apt-get install -y bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev libesd0-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libwxgtk3.0-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+
 # for audit2allow
 sudo apt-get install -y policycoreutils
 
 ### cron
 # cron can not use ln
 #sudo ln -sf   /home/bit/workspace1/github/config/crontab_user  /var/spool/cron/crontabs/bit
+
+fi
+
+
+if [ -n "$PYTHON_APP_SUPPORT" ]
+then
+
+sudo apt-get install -y python2.7-dev
+
+#setup python basic
+wget http://peak.telecommunity.com/dist/ez_setup.py
+sudo python ez_setup.py
+sudo easy_install pip
+
+# setup baidupan
+sudo pip install requests
+sudo pip install bypy
 
 ### python markdown setup
 #wget http://peak.telecommunity.com/dist/ez_setup.py
@@ -185,3 +218,4 @@ sudo apt-get install -y policycoreutils
 #sudo pip install PyYAML 
 #sudo pip install Pygments
 fi
+
