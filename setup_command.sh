@@ -12,16 +12,16 @@ while getopts "adbvsthzm" optname
 +--------------------------------------------------------------
 =====please modify /etc/apt/source.list manually first=====
 options are:
-a: not implmented  
-d:default = basic + vim + zsh + tmux 
-b basic
-v vim support
-s add ss and tsock support
-h host support
-z zsh and oh my zsh support
-t tmux
-p python and pip app(bypy markdown) support
-m misc support // all others
+a: all, recomand use -d:dmefault
+d: default = basic + vim + zsh + tmux 
+b: basic
+v: vim support
+s: add ss and tsock support
+h: host support
+z: zsh and oh my zsh support
+t: tmux
+p: python and pip app(bypy markdown) support
+m: misc support // all others
 +--------------------------------------------------------------+
 EOF
 		exit
@@ -32,7 +32,7 @@ EOF
       "d")
 		DEFAULT=1
 		BASIC=1
-		VIM_SUPPORT=1
+                VIM_SPF13_SUPPORT=1
 		ZSH_OH_SUPPORT=1
 		TMUX_SUPPORT=1
         ;;
@@ -43,7 +43,7 @@ EOF
 		SS_SUPPORT=1
         ;;
       "v")
-		VIM_SUPPORT=1
+                VIM_SPF13_SUPPORT=1
         ;;
       "h")
 		HOST_SUPPORT=1
@@ -141,42 +141,67 @@ then
 sudo apt-get install -y tmux
 git clone https://github.com/bitliuxm/tmux-config.git ~/workspace/github/tmux-config
 ln -sf ~/workspace/github/tmux-config/.tmux.conf ~/.tmux.conf
+
+# for plugins
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+git clone https://github.com/tmux-plugins/tmux-resurrect ~/.tmux/plugins/tmux-resurrect
+
+# tmux plugins manager(tpm) need to be placed under "run '~/.tmux/plugins/tpm/tpm'"
+tmux source ~/.tmux.conf
+# and then [prefix + I] to install all plugins in .tmux.conf
 fi
 
 if [ -n "$SAMBA_SUPPORT$ALL" ]
 then
 sudo apt-get install -y samba --fix-missing
+sudo apt-get install -y smbclient
 sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.default
 #sudo rm /etc/samba/smb.conf
 #sudo ln -sf /home/bit/workspace1/github/config/smb.conf /etc/samba/smb.conf
+
+# need add smb user passwd
+sudo smbpasswd -a "$USER"
 fi
 
-if [ -n "$ZSH_OH_SUPPORT" ]
+if [ -n "$ZSH_OH_SUPPORT$ALL" ]
 then
 sudo apt-get install -y zsh
-ln -sf ~/workspace/github/config/zshrc ~/.zshrc
-sudo chsh -s /bin/zsh
+# should not add sudo for chsh
+chsh -s /bin/zsh
 
 # oh my zsh
-chmod +x ~/workspace/github/config/oh_my_zsh_install.sh
-~/workspace/github/config/oh_my_zsh_install.sh
+sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+ln -sf ~/workspace/github/config/zshrc ~/.zshrc
 fi
 
-if [ -n "$VIM_SPF13_SUPPORT" ]
+if [ -n "$VIM_SPF13_SUPPORT$ALL" ]
 then
 # spf13
 # vim spf13 install, should only be excute as user
 sudo apt-get install -y ack-grep
 sudo apt-get install -y exuberant-ctags
-#vim spf13 install, should only be excute as user
-chmod +x ~/workspace/github/config/install_spf13.sh
-~/workspace/github/config/install_spf13.sh
+
 ln -sf ~/workspace/github/config/.vimrc.bundles.local ~/.vimrc.bundles.local
 ln -sf ~/workspace/github/config/vimrc.before.local ~/.vimrc.before.local
 ln -sf ~/workspace/github/config/vimrc.local ~/.vimrc.local
+
+# for YCM
+sudo apt-get install -y build-essential cmake
+sudo apt-get install -y python-dev python3-dev
+
+#vim spf13 install, should only be excute as user
+# plugin will be auto installed based on configures
+curl https://j.mp/spf13-vim3 -L > spf13-vim.sh && sh spf13-vim.sh
+# this cmd need manually confirm
+vim -c BundleUpdate -c quitall
+
+# if YCM not work
+cd ~/.vim/bundle/YouCompleteMe
+./install.py --clang-completer
+
 fi
 
-if [ -n "$MISC_SUPPORT" ]
+if [ -n "$MISC_SUPPORT$ALL" ]
 then
 
 # for bash check
@@ -195,7 +220,7 @@ sudo apt-get install -y policycoreutils
 fi
 
 
-if [ -n "$PYTHON_APP_SUPPORT" ]
+if [ -n "$PYTHON_APP_SUPPORT$ALL" ]
 then
 
 sudo apt-get install -y python2.7-dev
