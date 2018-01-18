@@ -82,6 +82,12 @@ sudo cp sources.list /etc/apt/sources.list
 
 # need to use sudo 
 sudo apt-get update
+
+# fix update error in U16
+sudo apt-get purge libappstream3
+
+sudo apt-get update 
+
 sudo apt-get install -y openssh-server
 mkdir ~/workspace
 sudo apt-get install -y vim-nox
@@ -180,6 +186,7 @@ then
 # vim spf13 install, should only be excute as user
 sudo apt-get install -y ack-grep
 sudo apt-get install -y exuberant-ctags
+sudo apt-get install -y shellcheck
 
 ln -sf ~/workspace/github/config/.vimrc.bundles.local ~/.vimrc.bundles.local
 ln -sf ~/workspace/github/config/vimrc.before.local ~/.vimrc.before.local
