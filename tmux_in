@@ -1,0 +1,11 @@
+#! /bin/bash
+
+SESSION=`tmux list-sessions`
+
+if [ -n "$SESSION" ]
+then
+tmux attach
+else
+tmux
+fi
+
