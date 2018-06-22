@@ -4,6 +4,8 @@
 #echo "$1" 
 filename=`echo "$1" | sed "s/-f //g"`
 
+USE_SPACE=1
+
 echo(){
   :
 }
@@ -37,16 +39,26 @@ while getopts ":l:f:" optname
         # add this to warning when // is used
 		# todo change the // to /* */
 		# '<,'>:s/\(.*\)\/\/\(.*\)/\/*\2 *\/\r\1/ 
+		
+		if [ "$USE_SPACE" -eq 1 ]
+		then
+			sed -i "$startline,$endline"' s/	/    /g'  "$filename"
+		else
+			sed -i "$startline,$endline"' s/    /	/g'  "$filename"
+		fi
+
+		# remove space in end
+		sed -i "$startline,$endline"' s/[ \t]*$//g'  "$filename"
 
         # 查找使用了 // 的注释的位置, 使用set-x的原因是标准错误被python给拿走了
 		error_comment=`cat $filename | sed -n "$startline,$endline  s/\/\/.*/&/p"`
 		if [ -n "$error_comment"  ]
 		then
 			set -x
-			echo "$error_comment"
+			echo "error_comment in :"
+			echo "err""$error_comment"
 			set +x
 		fi
-
         ;;
       "?")
         echo "Unknown option $OPTARG"
